@@ -10,6 +10,15 @@ use crate::sql::db_connection_pool::{
 
 use crate::sql::sql_provider_datafusion::{Engine, SqlTable};
 
+use crate::util::{
+    self,
+    column_reference::{self, ColumnReference},
+    constraints::{self, get_primary_keys_from_constraints},
+    indexes::IndexType,
+    on_conflict::{self, OnConflict},
+    secrets::to_secret_map,
+    table_reference_to_exist_check_sql, table_reference_to_table_ref, to_datafusion_error,
+};
 use arrow::{
     array::RecordBatch,
     datatypes::{Schema, SchemaRef},
@@ -29,18 +38,9 @@ use datafusion::{
     sql::TableReference,
 };
 use postgres_native_tls::MakeTlsConnector;
+use sea_query::{DeleteStatement, PostgresQueryBuilder};
 use snafu::prelude::*;
 use std::{collections::HashMap, sync::Arc};
-
-use crate::util::{
-    self,
-    column_reference::{self, ColumnReference},
-    constraints::{self, get_primary_keys_from_constraints},
-    indexes::IndexType,
-    on_conflict::{self, OnConflict},
-    secrets::to_secret_map,
-    to_datafusion_error,
-};
 
 use self::write::PostgresTableWriter;
 
@@ -111,7 +111,7 @@ pub enum Error {
     UnableToCreateInsertStatement { source: SqlGenError },
 
     #[snafu(display("The table '{table_name}' doesn't exist in the Postgres server"))]
-    TableDoesntExist { table_name: String },
+    TableDoesntExist { table_name: TableReference },
 
     #[snafu(display("Constraint Violation: {source}"))]
     ConstraintViolation { source: constraints::Error },
@@ -311,7 +311,7 @@ impl TableProviderFactory for PostgresTableProviderFactory {
 
 #[derive(Clone)]
 pub struct Postgres {
-    table_name: String,
+    table: TableReference,
     pool: Arc<PostgresConnectionPool>,
     schema: SchemaRef,
     constraints: Constraints,
@@ -320,13 +320,13 @@ pub struct Postgres {
 impl Postgres {
     #[must_use]
     pub fn new(
-        table_name: String,
+        table: impl Into<TableReference>,
         pool: Arc<PostgresConnectionPool>,
         schema: SchemaRef,
         constraints: Constraints,
     ) -> Self {
         Self {
-            table_name,
+            table: table.into(),
             pool,
             schema,
             constraints,
@@ -334,8 +334,8 @@ impl Postgres {
     }
 
     #[must_use]
-    pub fn table_name(&self) -> &str {
-        &self.table_name
+    pub fn table_name(&self) -> &TableReference {
+        &self.table
     }
 
     #[must_use]
@@ -350,7 +350,7 @@ impl Postgres {
 
         if !self.table_exists(pg_conn).await {
             TableDoesntExistSnafu {
-                table_name: self.table_name.clone(),
+                table_name: self.table.clone(),
             }
             .fail()?;
         }
@@ -368,21 +368,10 @@ impl Postgres {
     }
 
     async fn table_exists(&self, postgres_conn: &PostgresConnection) -> bool {
-        let sql = format!(
-            r#"SELECT EXISTS (
-          SELECT 1
-          FROM information_schema.tables
-          WHERE table_name = '{name}'
-        )"#,
-            name = self.table_name
-        );
+        let sql = table_reference_to_exist_check_sql(&self.table, PostgresQueryBuilder);
         tracing::trace!("{sql}");
 
-        let Ok(row) = postgres_conn.conn.query_one(&sql, &[]).await else {
-            return false;
-        };
-
-        row.get(0)
+        postgres_conn.conn.execute(&sql, &[]).await.is_ok()
     }
 
     async fn insert_batch(
@@ -391,7 +380,7 @@ impl Postgres {
         batch: RecordBatch,
         on_conflict: Option<OnConflict>,
     ) -> Result<()> {
-        let insert_table_builder = InsertBuilder::new(&self.table_name, vec![batch]);
+        let insert_table_builder = InsertBuilder::new(self.table.clone(), vec![batch]);
 
         let sea_query_on_conflict =
             on_conflict.map(|oc| oc.build_sea_query_on_conflict(&self.schema));
@@ -409,11 +398,11 @@ impl Postgres {
     }
 
     async fn delete_all_table_data(&self, transaction: &Transaction<'_>) -> Result<()> {
+        let delete = DeleteStatement::new()
+            .from_table(table_reference_to_table_ref(&self.table))
+            .to_string(PostgresQueryBuilder);
         transaction
-            .execute(
-                format!(r#"DELETE FROM "{}""#, self.table_name).as_str(),
-                &[],
-            )
+            .execute(&delete, &[])
             .await
             .context(UnableToDeleteAllTableDataSnafu)?;
 
@@ -427,7 +416,7 @@ impl Postgres {
         primary_keys: Vec<String>,
     ) -> Result<()> {
         let create_table_statement =
-            CreateTableBuilder::new(schema, &self.table_name).primary_keys(primary_keys);
+            CreateTableBuilder::new(schema, self.table.clone()).primary_keys(primary_keys);
         let create_stmts = create_table_statement.build_postgres();
 
         for create_stmt in create_stmts {
@@ -446,7 +435,7 @@ impl Postgres {
         columns: Vec<&str>,
         unique: bool,
     ) -> Result<()> {
-        let mut index_builder = IndexBuilder::new(&self.table_name, columns);
+        let mut index_builder = IndexBuilder::new(&self.table.to_string(), columns);
         if unique {
             index_builder = index_builder.unique();
         }

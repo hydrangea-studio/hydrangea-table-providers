@@ -1,3 +1,4 @@
+use crate::util::table_reference_to_table_ref;
 use arrow::{
     array::{
         array, Array, ArrayRef, BooleanArray, Float32Array, Float64Array, Int16Array, Int32Array,
@@ -9,6 +10,7 @@ use arrow::{
 };
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, FixedOffset};
+use datafusion::common::TableReference;
 use num_bigint::BigInt;
 use sea_query::{
     Alias, ColumnDef, ColumnType, Expr, GenericBuilder, Index, InsertStatement, IntoIden,
@@ -34,16 +36,16 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 pub struct CreateTableBuilder {
     schema: SchemaRef,
-    table_name: String,
+    table: TableReference,
     primary_keys: Vec<String>,
 }
 
 impl CreateTableBuilder {
     #[must_use]
-    pub fn new(schema: SchemaRef, table_name: &str) -> Self {
+    pub fn new(schema: SchemaRef, table: impl Into<TableReference>) -> Self {
         Self {
             schema,
-            table_name: table_name.to_string(),
+            table: table.into(),
             primary_keys: Vec::new(),
         }
     }
@@ -65,10 +67,14 @@ impl CreateTableBuilder {
             map_data_type_to_column_type_postgres,
         };
         let schema = Arc::clone(&self.schema);
-        let table_name = self.table_name.clone();
+        let table_name = match &self.table {
+            TableReference::Bare { table }
+            | TableReference::Partial { table, .. }
+            | TableReference::Full { table, .. } => table.clone(),
+        };
         let main_table_creation =
             self.build(PostgresQueryBuilder, &|f: &Arc<Field>| -> ColumnType {
-                map_data_type_to_column_type_postgres(f.data_type(), &table_name, f.name())
+                map_data_type_to_column_type_postgres(f.data_type(), table_name.as_ref(), f.name())
             });
 
         // Postgres supports composite types (i.e. Structs) but needs to have the type defined first
@@ -79,7 +85,7 @@ impl CreateTableBuilder {
                 continue;
             };
             let type_builder = TypeBuilder::new(
-                get_postgres_composite_type_name(&table_name, field.name()),
+                get_postgres_composite_type_name(table_name.as_ref(), field.name()),
                 struct_inner_fields,
             );
             creation_stmts.push(type_builder.build());
@@ -122,7 +128,7 @@ impl CreateTableBuilder {
     ) -> String {
         let mut create_stmt = Table::create();
         create_stmt
-            .table(Alias::new(self.table_name.clone()))
+            .table(table_reference_to_table_ref(&self.table))
             .if_not_exists();
 
         for field in self.schema.fields() {
@@ -177,7 +183,7 @@ macro_rules! push_list_values {
 }
 
 pub struct InsertBuilder {
-    table_name: String,
+    table: TableReference,
     record_batches: Vec<RecordBatch>,
 }
 
@@ -206,9 +212,9 @@ pub fn use_json_insert_for_type<T: QueryBuilder + 'static>(
 
 impl InsertBuilder {
     #[must_use]
-    pub fn new(table_name: &str, record_batches: Vec<RecordBatch>) -> Self {
+    pub fn new(table: impl Into<TableReference>, record_batches: Vec<RecordBatch>) -> Self {
         Self {
-            table_name: table_name.to_string(),
+            table: table.into(),
             record_batches,
         }
     }
@@ -1023,7 +1029,7 @@ impl InsertBuilder {
             .collect();
 
         let mut insert_stmt = Query::insert()
-            .into_table(Alias::new(&self.table_name))
+            .into_table(table_reference_to_table_ref(&self.table))
             .columns(columns)
             .to_owned();
 
@@ -1038,16 +1044,16 @@ impl InsertBuilder {
 }
 
 pub struct IndexBuilder {
-    table_name: String,
+    table: TableReference,
     columns: Vec<String>,
     unique: bool,
 }
 
 impl IndexBuilder {
     #[must_use]
-    pub fn new(table_name: &str, columns: Vec<&str>) -> Self {
+    pub fn new(table: impl Into<TableReference>, columns: Vec<&str>) -> Self {
         Self {
-            table_name: table_name.to_string(),
+            table: table.into(),
             columns: columns.into_iter().map(ToString::to_string).collect(),
             unique: false,
         }
@@ -1061,7 +1067,7 @@ impl IndexBuilder {
 
     #[must_use]
     pub fn index_name(&self) -> String {
-        format!("i_{}_{}", self.table_name, self.columns.join("_"))
+        format!("i_{}_{}", self.table.table(), self.columns.join("_"))
     }
 
     #[must_use]
@@ -1082,7 +1088,7 @@ impl IndexBuilder {
     #[must_use]
     pub fn build<T: GenericBuilder>(self, query_builder: T) -> String {
         let mut index = Index::create();
-        index.table(Alias::new(&self.table_name));
+        index.table(table_reference_to_table_ref(&self.table));
         index.name(self.index_name());
         if self.unique {
             index.unique();
@@ -1395,7 +1401,7 @@ mod tests {
             Field::new("name", DataType::Utf8, false),
             Field::new("age", DataType::Int32, true),
         ]);
-        let sql = CreateTableBuilder::new(SchemaRef::new(schema), "users").build_sqlite();
+        let sql = CreateTableBuilder::new(SchemaRef::new(schema), "users".into()).build_sqlite();
 
         assert_eq!(sql, "CREATE TABLE IF NOT EXISTS \"users\" ( \"id\" integer NOT NULL, \"name\" text NOT NULL, \"age\" integer )");
     }
@@ -1452,7 +1458,7 @@ mod tests {
             Field::new("name", DataType::Utf8, false),
             Field::new("age", DataType::Int32, true),
         ]);
-        let sql = CreateTableBuilder::new(SchemaRef::new(schema), "users")
+        let sql = CreateTableBuilder::new(SchemaRef::new(schema), "users".into())
             .primary_keys(vec!["id", "id2"])
             .build_sqlite();
 

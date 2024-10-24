@@ -5,11 +5,12 @@ use std::hash::Hash;
 use std::sync::Arc;
 
 use crate::sql::sql_provider_datafusion::Engine;
-use datafusion::common::DataFusionError;
+use datafusion::common::{DataFusionError, TableReference};
 use datafusion::{
     error::Result as DataFusionResult,
     sql::unparser::{dialect::DefaultDialect, Unparser},
 };
+use sea_query::{Alias, Asterisk, DynIden, Query, QueryBuilder, TableRef};
 
 pub mod column_reference;
 pub mod constraints;
@@ -87,9 +88,45 @@ where
     DataFusionError::External(Box::new(error))
 }
 
+#[must_use]
+pub fn table_reference_to_table_ref(table_reference: &TableReference) -> TableRef {
+    match table_reference {
+        TableReference::Bare { table } => {
+            TableRef::Table(DynIden::new(Alias::new(table.to_string())))
+        }
+        TableReference::Partial { schema, table } => TableRef::SchemaTable(
+            DynIden::new(Alias::new(schema.to_string())),
+            DynIden::new(Alias::new(table.to_string())),
+        ),
+        TableReference::Full {
+            catalog,
+            schema,
+            table,
+        } => TableRef::DatabaseSchemaTable(
+            DynIden::new(Alias::new(catalog.to_string())),
+            DynIden::new(Alias::new(schema.to_string())),
+            DynIden::new(Alias::new(table.to_string())),
+        ),
+    }
+}
+
+#[must_use]
+pub fn table_reference_to_exist_check_sql<T: QueryBuilder>(
+    table_reference: &TableReference,
+    query_builder: T,
+) -> String {
+    let mut select = Query::select();
+    select
+        .column(Asterisk)
+        .from(table_reference_to_table_ref(table_reference))
+        .limit(0);
+    select.to_string(query_builder)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sea_query::{PostgresQueryBuilder, SqliteQueryBuilder};
     use std::collections::HashMap;
 
     #[test]
@@ -148,5 +185,15 @@ mod tests {
         expected.insert("key2".to_string(), "value2".to_string());
 
         assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn exist_check_sql() {
+        let table_reference = TableReference::Bare {
+            table: "table_name".into(),
+        };
+        let query_builder = PostgresQueryBuilder;
+        let result = table_reference_to_exist_check_sql(&table_reference, query_builder);
+        assert_eq!(result, "SELECT * FROM \"table_name\" LIMIT 0");
     }
 }

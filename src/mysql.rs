@@ -29,7 +29,10 @@ use crate::util::constraints::get_primary_keys_from_constraints;
 use crate::util::indexes::IndexType;
 use crate::util::on_conflict::OnConflict;
 use crate::util::secrets::to_secret_map;
-use crate::util::{column_reference, constraints, on_conflict, to_datafusion_error};
+use crate::util::{
+    column_reference, constraints, on_conflict, table_reference_to_exist_check_sql,
+    table_reference_to_table_ref, to_datafusion_error,
+};
 use arrow::array::RecordBatch;
 use arrow::datatypes::{Schema, SchemaRef};
 use async_trait::async_trait;
@@ -40,7 +43,7 @@ use datafusion::{
 };
 use mysql_async::prelude::{Queryable, ToValue};
 use mysql_async::TxOpts;
-use sea_query::{Alias, DeleteStatement, MysqlQueryBuilder};
+use sea_query::{DeleteStatement, MysqlQueryBuilder};
 use snafu::prelude::*;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -92,7 +95,7 @@ pub enum Error {
     },
 
     #[snafu(display("The table '{table_name}' doesn't exist in the MySQL server"))]
-    TableDoesntExist { table_name: String },
+    TableDoesntExist { table_name: TableReference },
 
     #[snafu(display("Constraint Violation: {source}"))]
     ConstraintViolation { source: constraints::Error },
@@ -144,9 +147,8 @@ impl MySQLTableFactory {
         let read_provider = Self::table_provider(self, table_reference.clone()).await?;
         let schema = read_provider.schema();
 
-        let table_name = table_reference.to_string();
         let mysql = MySQL::new(
-            table_name,
+            table_reference,
             Arc::clone(&self.pool),
             schema,
             Constraints::empty(),
@@ -178,7 +180,7 @@ impl TableProviderFactory for MySQLTableProviderFactory {
         _state: &dyn Session,
         cmd: &CreateExternalTable,
     ) -> datafusion::common::Result<Arc<dyn TableProvider>> {
-        let name = cmd.name.to_string();
+        let name = cmd.name.clone();
         let mut options = cmd.options.clone();
         let schema: Schema = cmd.schema.as_ref().into();
 
@@ -209,7 +211,7 @@ impl TableProviderFactory for MySQLTableProviderFactory {
             on_conflict = Some(
                 OnConflict::try_from(on_conflict_str.as_str())
                     .context(UnableToParseOnConflictSnafu)
-                    .map_err(util::to_datafusion_error)?,
+                    .map_err(to_datafusion_error)?,
             );
         }
 
@@ -275,7 +277,7 @@ impl TableProviderFactory for MySQLTableProviderFactory {
             "mysql",
             &dyn_pool,
             Arc::clone(&schema),
-            TableReference::bare(name.clone()),
+            name.clone(),
             Some(Engine::MySQL),
         ));
 
@@ -285,7 +287,7 @@ impl TableProviderFactory for MySQLTableProviderFactory {
 }
 
 pub struct MySQL {
-    table_name: String,
+    table: TableReference,
     pool: Arc<MySQLConnectionPool>,
     schema: SchemaRef,
     constraints: Constraints,
@@ -294,13 +296,13 @@ pub struct MySQL {
 impl MySQL {
     #[must_use]
     pub fn new(
-        table_name: String,
+        table: TableReference,
         pool: Arc<MySQLConnectionPool>,
         schema: SchemaRef,
         constraints: Constraints,
     ) -> Self {
         Self {
-            table_name,
+            table,
             pool,
             schema,
             constraints,
@@ -308,8 +310,8 @@ impl MySQL {
     }
 
     #[must_use]
-    pub fn table_name(&self) -> &str {
-        &self.table_name
+    pub fn table_name(&self) -> &TableReference {
+        &self.table
     }
 
     #[must_use]
@@ -324,7 +326,7 @@ impl MySQL {
 
         if !self.table_exists(mysql_conn).await {
             TableDoesntExistSnafu {
-                table_name: self.table_name.clone(),
+                table_name: self.table.clone(),
             }
             .fail()?;
         }
@@ -342,26 +344,15 @@ impl MySQL {
     }
 
     async fn table_exists(&self, mysql_connection: &MySQLConnection) -> bool {
-        let sql = format!(
-            r#"SELECT EXISTS (
-          SELECT 1
-          FROM information_schema.tables
-          WHERE table_name = '{name}'
-        )"#,
-            name = self.table_name
-        );
+        let sql = table_reference_to_exist_check_sql(&self.table, MysqlQueryBuilder);
         tracing::trace!("{sql}");
-        let Ok(Some((exists,))) = mysql_connection
+        mysql_connection
             .conn
             .lock()
             .await
-            .query_first::<(bool,), _>(&sql)
+            .exec_drop(&sql, &())
             .await
-        else {
-            return false;
-        };
-
-        exists
+            .is_ok()
     }
 
     async fn insert_batch(
@@ -370,7 +361,7 @@ impl MySQL {
         batch: RecordBatch,
         on_conflict: Option<OnConflict>,
     ) -> Result<()> {
-        let insert_table_builder = InsertBuilder::new(&self.table_name, vec![batch]);
+        let insert_table_builder = InsertBuilder::new(self.table.clone(), vec![batch]);
 
         let sea_query_on_conflict =
             on_conflict.map(|oc| oc.build_sea_query_on_conflict(&self.schema));
@@ -392,7 +383,7 @@ impl MySQL {
         transaction: &mut mysql_async::Transaction<'_>,
     ) -> Result<()> {
         let delete = DeleteStatement::new()
-            .from_table(Alias::new(self.table_name.clone()))
+            .from_table(table_reference_to_table_ref(&self.table))
             .to_string(MysqlQueryBuilder);
         transaction
             .exec_drop(delete.as_str(), ())
@@ -409,7 +400,7 @@ impl MySQL {
         primary_keys: Vec<String>,
     ) -> Result<()> {
         let create_table_statement =
-            CreateTableBuilder::new(schema, &self.table_name).primary_keys(primary_keys);
+            CreateTableBuilder::new(schema, self.table.clone()).primary_keys(primary_keys);
         let create_stmts = create_table_statement.build_mysql();
 
         transaction
@@ -424,7 +415,7 @@ impl MySQL {
         columns: Vec<&str>,
         unique: bool,
     ) -> Result<()> {
-        let mut index_builder = IndexBuilder::new(&self.table_name, columns);
+        let mut index_builder = IndexBuilder::new(self.table.clone(), columns);
         if unique {
             index_builder = index_builder.unique();
         }
