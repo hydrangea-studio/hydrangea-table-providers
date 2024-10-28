@@ -131,6 +131,7 @@ impl MySQLTableFactory {
                 .context(UnableToConstructSQLTableSnafu)?,
         );
 
+        #[cfg(feature = "mysql-federation")]
         let table_provider = Arc::new(
             table_provider
                 .create_federated_table_provider()
