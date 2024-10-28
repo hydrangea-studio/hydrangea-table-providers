@@ -190,7 +190,7 @@ impl<T, P> SqlTable<T, P> {
     }
 
     // Return the current memory location of the object as a unique identifier
-    fn unique_id(&self) -> usize {
+    pub fn unique_id(&self) -> usize {
         std::ptr::from_ref(self) as usize
     }
 

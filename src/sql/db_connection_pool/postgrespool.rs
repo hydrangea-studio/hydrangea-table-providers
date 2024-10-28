@@ -9,7 +9,7 @@ use bb8_postgres::{
 };
 use native_tls::{Certificate, TlsConnector};
 use postgres_native_tls::MakeTlsConnector;
-use secrecy::{ExposeSecret, Secret, SecretString};
+use secrecy::{ExposeSecret, SecretString};
 use snafu::{prelude::*, ResultExt};
 use tokio_postgres;
 
@@ -81,7 +81,7 @@ impl PostgresConnectionPool {
     /// # Errors
     ///
     /// Returns an error if there is a problem creating the connection pool.
-    pub async fn new(params: HashMap<String, SecretString>) -> Result<Self> {
+    pub async fn new(params: HashMap<String, SecretString>, test: bool) -> Result<Self> {
         // Remove the "pg_" prefix from the keys to keep backward compatibility
         let params = util::remove_prefix_from_hashmap_keys(params, "pg_");
 
@@ -89,10 +89,11 @@ impl PostgresConnectionPool {
         let mut ssl_mode = "verify-full".to_string();
         let mut ssl_rootcert_path: Option<PathBuf> = None;
 
-        if let Some(pg_connection_string) =
-            params.get("connection_string").map(Secret::expose_secret)
+        if let Some(pg_connection_string) = params
+            .get("connection_string")
+            .map(SecretString::expose_secret)
         {
-            let (str, mode, cert_path) = parse_connection_string(pg_connection_string.as_str());
+            let (str, mode, cert_path) = parse_connection_string(pg_connection_string);
             connection_string = str;
             ssl_mode = mode;
             if let Some(cert_path) = cert_path {
@@ -104,24 +105,24 @@ impl PostgresConnectionPool {
                 ssl_rootcert_path = Some(PathBuf::from(sslrootcert));
             }
         } else {
-            if let Some(pg_host) = params.get("host").map(Secret::expose_secret) {
+            if let Some(pg_host) = params.get("host").map(SecretString::expose_secret) {
                 connection_string.push_str(format!("host={pg_host} ").as_str());
             }
-            if let Some(pg_user) = params.get("user").map(Secret::expose_secret) {
+            if let Some(pg_user) = params.get("user").map(SecretString::expose_secret) {
                 connection_string.push_str(format!("user={pg_user} ").as_str());
             }
-            if let Some(pg_db) = params.get("db").map(Secret::expose_secret) {
+            if let Some(pg_db) = params.get("db").map(SecretString::expose_secret) {
                 connection_string.push_str(format!("dbname={pg_db} ").as_str());
             }
-            if let Some(pg_pass) = params.get("pass").map(Secret::expose_secret) {
+            if let Some(pg_pass) = params.get("pass").map(SecretString::expose_secret) {
                 connection_string.push_str(format!("password={pg_pass} ").as_str());
             }
-            if let Some(pg_port) = params.get("port").map(Secret::expose_secret) {
+            if let Some(pg_port) = params.get("port").map(SecretString::expose_secret) {
                 connection_string.push_str(format!("port={pg_port} ").as_str());
             }
         }
 
-        if let Some(pg_sslmode) = params.get("sslmode").map(Secret::expose_secret) {
+        if let Some(pg_sslmode) = params.get("sslmode").map(SecretString::expose_secret) {
             match pg_sslmode.to_lowercase().as_str() {
                 "disable" | "require" | "prefer" | "verify-ca" | "verify-full" => {
                     ssl_mode = pg_sslmode.to_string();
@@ -134,7 +135,7 @@ impl PostgresConnectionPool {
                 }
             }
         }
-        if let Some(pg_sslrootcert) = params.get("sslrootcert").map(Secret::expose_secret) {
+        if let Some(pg_sslrootcert) = params.get("sslrootcert").map(SecretString::expose_secret) {
             ensure!(
                 std::path::Path::new(pg_sslrootcert).exists(),
                 InvalidRootCertPathSnafu {
@@ -165,7 +166,9 @@ impl PostgresConnectionPool {
 
         let tls_connector = get_tls_connector(ssl_mode.as_str(), certs)?;
         let connector = MakeTlsConnector::new(tls_connector);
-        test_postgres_connection(connection_string.as_str(), connector.clone()).await?;
+        if test {
+            test_postgres_connection(connection_string.as_str(), connector.clone()).await?;
+        }
 
         let join_push_down = get_join_context(&config);
 
@@ -175,7 +178,7 @@ impl PostgresConnectionPool {
         let mut connection_pool_size = 10; // The BB8 default is 10
         if let Some(pg_pool_size) = params
             .get("connection_pool_size")
-            .map(Secret::expose_secret)
+            .map(SecretString::expose_secret)
         {
             connection_pool_size = pg_pool_size.parse().context(InvalidIntegerParameterSnafu {
                 parameter_name: "pool_size".to_string(),
@@ -190,10 +193,12 @@ impl PostgresConnectionPool {
             .context(ConnectionPoolSnafu)?;
 
         // Test the connection
-        let conn = pool.get().await.context(ConnectionPoolRunSnafu)?;
-        conn.execute("SELECT 1", &[])
-            .await
-            .context(ConnectionPoolSnafu)?;
+        if test {
+            let conn = pool.get().await.context(ConnectionPoolRunSnafu)?;
+            conn.execute("SELECT 1", &[])
+                .await
+                .context(ConnectionPoolSnafu)?;
+        }
 
         Ok(PostgresConnectionPool {
             pool: Arc::new(pool.clone()),

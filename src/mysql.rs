@@ -219,7 +219,7 @@ impl TableProviderFactory for MySQLTableProviderFactory {
         let params = to_secret_map(options);
 
         let pool = Arc::new(
-            MySQLConnectionPool::new(params)
+            MySQLConnectionPool::new(params, true)
                 .await
                 .context(UnableToCreateMySQLConnectionPoolSnafu)
                 .map_err(to_datafusion_error)?,

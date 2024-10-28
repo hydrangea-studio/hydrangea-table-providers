@@ -242,7 +242,7 @@ impl TableProviderFactory for PostgresTableProviderFactory {
         let params = to_secret_map(options);
 
         let pool = Arc::new(
-            PostgresConnectionPool::new(params)
+            PostgresConnectionPool::new(params, true)
                 .await
                 .context(UnableToCreatePostgresConnectionPoolSnafu)
                 .map_err(to_datafusion_error)?,

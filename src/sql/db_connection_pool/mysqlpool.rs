@@ -5,7 +5,7 @@ use mysql_async::{
     prelude::{Queryable, ToValue},
     DriverError, Opts, Params, Row, SslOpts,
 };
-use secrecy::{ExposeSecret, Secret, SecretString};
+use secrecy::{ExposeSecret, SecretString};
 use snafu::{ResultExt, Snafu};
 
 use crate::{
@@ -74,7 +74,7 @@ impl MySQLConnectionPool {
     ///
     /// Returns an error if there is a problem creating the connection pool.
     #[allow(clippy::unused_async)]
-    pub async fn new(params: HashMap<String, SecretString>) -> Result<Self> {
+    pub async fn new(params: HashMap<String, SecretString>, test: bool) -> Result<Self> {
         // Remove the "mysql_" prefix from the keys to keep backward compatibility
         let params = util::remove_prefix_from_hashmap_keys(params, "mysql_");
 
@@ -82,36 +82,37 @@ impl MySQLConnectionPool {
         let mut ssl_mode = "required";
         let mut ssl_rootcert_path: Option<PathBuf> = None;
 
-        if let Some(mysql_connection_string) =
-            params.get("connection_string").map(Secret::expose_secret)
+        if let Some(mysql_connection_string) = params
+            .get("connection_string")
+            .map(SecretString::expose_secret)
         {
             connection_string = mysql_async::OptsBuilder::from_opts(
-                mysql_async::Opts::from_url(mysql_connection_string.as_str())
+                mysql_async::Opts::from_url(mysql_connection_string)
                     .context(InvalidConnectionStringSnafu)?,
             );
         } else {
-            if let Some(mysql_host) = params.get("host").map(Secret::expose_secret) {
-                connection_string = connection_string.ip_or_hostname(mysql_host.as_str());
+            if let Some(mysql_host) = params.get("host").map(SecretString::expose_secret) {
+                connection_string = connection_string.ip_or_hostname(mysql_host);
             }
-            if let Some(mysql_user) = params.get("user").map(Secret::expose_secret) {
+            if let Some(mysql_user) = params.get("user").map(SecretString::expose_secret) {
                 connection_string = connection_string.user(Some(mysql_user));
             }
-            if let Some(mysql_db) = params.get("db").map(Secret::expose_secret) {
+            if let Some(mysql_db) = params.get("db").map(SecretString::expose_secret) {
                 connection_string = connection_string.db_name(Some(mysql_db));
             }
-            if let Some(mysql_pass) = params.get("pass").map(Secret::expose_secret) {
+            if let Some(mysql_pass) = params.get("pass").map(SecretString::expose_secret) {
                 connection_string = connection_string.pass(Some(mysql_pass));
             }
-            if let Some(mysql_tcp_port) = params.get("tcp_port").map(Secret::expose_secret) {
+            if let Some(mysql_tcp_port) = params.get("tcp_port").map(SecretString::expose_secret) {
                 connection_string =
                     connection_string.tcp_port(mysql_tcp_port.parse::<u16>().unwrap_or(3306));
             }
         }
 
-        if let Some(mysql_sslmode) = params.get("sslmode").map(Secret::expose_secret) {
+        if let Some(mysql_sslmode) = params.get("sslmode").map(SecretString::expose_secret) {
             match mysql_sslmode.to_lowercase().as_str() {
                 "disabled" | "required" | "preferred" => {
-                    ssl_mode = mysql_sslmode.as_str();
+                    ssl_mode = mysql_sslmode;
                 }
                 _ => {
                     InvalidParameterSnafu {
@@ -121,7 +122,8 @@ impl MySQLConnectionPool {
                 }
             }
         }
-        if let Some(mysql_sslrootcert) = params.get("sslrootcert").map(Secret::expose_secret) {
+        if let Some(mysql_sslrootcert) = params.get("sslrootcert").map(SecretString::expose_secret)
+        {
             if !std::path::Path::new(mysql_sslrootcert).exists() {
                 InvalidRootCertPathSnafu {
                     path: mysql_sslrootcert,
@@ -144,33 +146,35 @@ impl MySQLConnectionPool {
 
         let pool = mysql_async::Pool::new(opts);
 
-        // Test the connection
-        let mut conn = pool.get_conn().await.map_err(|err| match err {
-            // In case of an incorrect user name, the error `Unknown authentication plugin 'sha256_password'` is returned.
-            // We override it with a more user-friendly error message.
-            mysql_async::Error::Driver(DriverError::UnknownAuthPlugin { .. }) => {
-                Error::InvalidUsernameOrPassword
-            }
-            mysql_async::Error::Server(server_error) => {
-                match server_error.code {
-                    // Code 1049: Server error: `ERROR 42000 (1049): Unknown database <database>
-                    1049 => Error::UnknownMySQLDatabase {
-                        message: server_error.message,
-                    },
-                    // Code 1045: Server error: ERROR 1045 (28000): Access denied for user <user> (using password: YES / NO)
-                    1045 => Error::InvalidUsernameOrPassword,
-                    _ => Error::MySQLConnectionError {
-                        source: mysql_async::Error::Server(server_error),
-                    },
+        if test {
+            // Test the connection
+            let mut conn = pool.get_conn().await.map_err(|err| match err {
+                // In case of an incorrect user name, the error `Unknown authentication plugin 'sha256_password'` is returned.
+                // We override it with a more user-friendly error message.
+                mysql_async::Error::Driver(DriverError::UnknownAuthPlugin { .. }) => {
+                    Error::InvalidUsernameOrPassword
                 }
-            }
-            _ => Error::MySQLConnectionError { source: err },
-        })?;
+                mysql_async::Error::Server(server_error) => {
+                    match server_error.code {
+                        // Code 1049: Server error: `ERROR 42000 (1049): Unknown database <database>
+                        1049 => Error::UnknownMySQLDatabase {
+                            message: server_error.message,
+                        },
+                        // Code 1045: Server error: ERROR 1045 (28000): Access denied for user <user> (using password: YES / NO)
+                        1045 => Error::InvalidUsernameOrPassword,
+                        _ => Error::MySQLConnectionError {
+                            source: mysql_async::Error::Server(server_error),
+                        },
+                    }
+                }
+                _ => Error::MySQLConnectionError { source: err },
+            })?;
 
-        let _rows: Vec<Row> = conn
-            .exec("SELECT 1", Params::Empty)
-            .await
-            .context(MySQLConnectionSnafu)?;
+            let _rows: Vec<Row> = conn
+                .exec("SELECT 1", Params::Empty)
+                .await
+                .context(MySQLConnectionSnafu)?;
+        }
 
         Ok(Self {
             pool: Arc::new(pool),
