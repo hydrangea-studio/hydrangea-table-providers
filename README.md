@@ -1,12 +1,18 @@
-# DataFusion Table Providers
+# Hydrangea Table Providers
 
-Note: This is not an official Apache Software Foundation project.
+Note: This is a fork of the **datafusion-table-providers** repository. The original repository can be
+found [here](https://github.com/datafusion-contrib/datafusion-table-providers).
 
-The goal of this repo is to extend the capabilities of DataFusion to support additional data sources via implementations of the `TableProvider` trait.
+The goal of this repo is to extend the capabilities of DataFusion to support additional data sources via implementations
+of the `TableProvider` trait.
 
-Many of the table providers in this repo are for querying data from other database systems. Those providers also integrate with the [`datafusion-federation`](https://github.com/datafusion-contrib/datafusion-federation/) crate to allow for more efficient query execution, such as pushing down joins between multiple tables from the same database system, or efficiently implementing TopK style queries (`SELECT * FROM table ORDER BY foo LIMIT 10`).
+Many of the table providers in this repo are for querying data from other database systems. Those providers also
+integrate with the [`datafusion-federation`](https://github.com/datafusion-contrib/datafusion-federation/) crate to
+allow for more efficient query execution, such as pushing down joins between multiple tables from the same database
+system, or efficiently implementing TopK style queries (`SELECT * FROM table ORDER BY foo LIMIT 10`).
 
-To use these table providers with efficient federation push-down, add the `datafusion-federation` crate and create a DataFusion `SessionContext` using the Federation optimizer rule and query planner with:
+To use these table providers with efficient federation push-down, add the `datafusion-federation` crate and create a
+DataFusion `SessionContext` using the Federation optimizer rule and query planner with:
 
 ```rust
 use datafusion::prelude::SessionContext;
@@ -49,7 +55,8 @@ cargo run --example sqlite --features sqlite
 
 ### Postgres
 
-In order to run the Postgres example, you need to have a Postgres server running. You can use the following command to start a Postgres server in a Docker container the example can use:
+In order to run the Postgres example, you need to have a Postgres server running. You can use the following command to
+start a Postgres server in a Docker container the example can use:
 
 ```bash
 docker run --name postgres -e POSTGRES_PASSWORD=password -e POSTGRES_DB=postgres_db -p 5432:5432 -d postgres:16-alpine
@@ -73,7 +80,8 @@ cargo run --example postgres --features postgres
 
 ### MySQL
 
-In order to run the MySQL example, you need to have a MySQL server running. You can use the following command to start a MySQL server in a Docker container the example can use:
+In order to run the MySQL example, you need to have a MySQL server running. You can use the following command to start a
+MySQL server in a Docker container the example can use:
 
 ```bash
 docker run --name mysql -e MYSQL_ROOT_PASSWORD=password -e MYSQL_DATABASE=mysql_db -p 3306:3306 -d mysql:9.0

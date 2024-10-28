@@ -1,11 +1,11 @@
 [package]
-name = "datafusion-table-providers"
-version = "0.2.3"
+name = "hydrangea-table-providers"
+version = "0.1.0"
 readme = "README.md"
 edition = "2021"
-repository = "https://github.com/datafusion-contrib/datafusion-table-providers"
+repository = "https://github.com/hydrangea-studio/hydrangea-table-providers"
 license = "Apache-2.0"
-description = "Extend the capabilities of DataFusion to support additional data sources via implementations of the `TableProvider` trait."
+description = "Provide TableProvider implementations for the hydrangea project"
 
 [dependencies]
 arrow = "53"
