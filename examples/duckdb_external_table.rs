@@ -5,8 +5,8 @@ use datafusion::{
     execution::{runtime_env::RuntimeEnv, session_state::SessionStateBuilder},
     prelude::SessionContext,
 };
-use datafusion_table_providers::duckdb::DuckDBTableProviderFactory;
 use duckdb::AccessMode;
+use hydrangea_table_providers::duckdb::DuckDBTableProviderFactory;
 
 /// This example demonstrates how to register the DuckDBTableProviderFactory into DataFusion so that
 /// DuckDB-backed tables can be created at runtime.

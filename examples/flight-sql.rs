@@ -16,8 +16,8 @@
 // under the License.
 
 use datafusion::prelude::SessionContext;
-use datafusion_table_providers::flight::sql::{FlightSqlDriver, QUERY};
-use datafusion_table_providers::flight::FlightTableFactory;
+use hydrangea_table_providers::flight::sql::{FlightSqlDriver, QUERY};
+use hydrangea_table_providers::flight::FlightTableFactory;
 use std::collections::HashMap;
 use std::sync::Arc;
 

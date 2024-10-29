@@ -10,9 +10,9 @@ use std::sync::Arc;
 
 use crate::postgres::common;
 use crate::postgres::PostgresTableProviderFactory;
-use datafusion_table_providers::postgres::PostgresTableFactory;
-use datafusion_table_providers::sql::db_connection_pool::postgrespool::PostgresConnectionPool;
-use datafusion_table_providers::util::secrets::to_secret_map;
+use hydrangea_table_providers::postgres::PostgresTableFactory;
+use hydrangea_table_providers::sql::db_connection_pool::postgrespool::PostgresConnectionPool;
+use hydrangea_table_providers::util::secrets::to_secret_map;
 
 const COMPLEX_TABLE_SQL: &str = include_str!("scripts/complex_table.sql");
 
@@ -72,7 +72,7 @@ async fn test_postgres_schema_inference() {
         .expect("table provider created");
 
     let postgres_pool = Arc::new(
-        PostgresConnectionPool::new(to_secret_map(common::get_pg_params(port)))
+        PostgresConnectionPool::new(to_secret_map(common::get_pg_params(port)), true)
             .await
             .expect("unable to create Postgres connection pool"),
     );
@@ -101,7 +101,7 @@ async fn test_postgres_schema_inference_complex_types() {
     let table_name = "example_table";
 
     let postgres_pool = Arc::new(
-        PostgresConnectionPool::new(to_secret_map(common::get_pg_params(port)))
+        PostgresConnectionPool::new(to_secret_map(common::get_pg_params(port)), true)
             .await
             .expect("unable to create Postgres connection pool"),
     );

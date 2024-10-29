@@ -27,8 +27,8 @@ use tonic::metadata::MetadataMap;
 use tonic::transport::Server;
 use tonic::{Extensions, Request, Response, Status, Streaming};
 
-use datafusion_table_providers::flight::sql::FlightSqlDriver;
-use datafusion_table_providers::flight::FlightTableFactory;
+use hydrangea_table_providers::flight::sql::FlightSqlDriver;
+use hydrangea_table_providers::flight::FlightTableFactory;
 
 const AUTH_HEADER: &str = "authorization";
 const BEARER_TOKEN: &str = "Bearer flight-sql-token";

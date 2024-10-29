@@ -1,5 +1,5 @@
 use datafusion::{prelude::SessionContext, sql::TableReference};
-use datafusion_table_providers::{
+use hydrangea_table_providers::{
     sql::db_connection_pool::{sqlitepool::SqliteConnectionPoolFactory, Mode},
     sqlite::SqliteTableFactory,
 };

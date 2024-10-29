@@ -10,7 +10,7 @@
 //! ```rust
 //! use std::sync::Arc;
 //! use arrow::datatypes::{DataType, Field, Schema};
-//! use datafusion_table_providers::sql::arrow_sql_gen::statement::CreateTableBuilder;
+//! use hydrangea_table_providers::sql::arrow_sql_gen::statement::CreateTableBuilder;
 //!
 //! let schema = Arc::new(Schema::new(vec![
 //!     Field::new("id", DataType::Int32, false),
@@ -27,7 +27,7 @@
 //! ```rust
 //! use std::sync::Arc;
 //! use arrow::datatypes::{DataType, Field, Schema};
-//! use datafusion_table_providers::sql::arrow_sql_gen::statement::CreateTableBuilder;
+//! use hydrangea_table_providers::sql::arrow_sql_gen::statement::CreateTableBuilder;
 //!
 //! let schema = Arc::new(Schema::new(vec![
 //!     Field::new("id", DataType::Int32, false),

@@ -8,7 +8,7 @@ use datafusion::logical_expr::CreateExternalTable;
 use datafusion::physical_plan::collect;
 use datafusion::physical_plan::memory::MemoryExec;
 use datafusion_federation::schema_cast::record_convert::try_cast_to;
-use datafusion_table_providers::duckdb::DuckDBTableProviderFactory;
+use hydrangea_table_providers::duckdb::DuckDBTableProviderFactory;
 use rstest::rstest;
 use std::collections::HashMap;
 use std::sync::Arc;

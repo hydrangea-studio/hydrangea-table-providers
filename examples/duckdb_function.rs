@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use datafusion::{prelude::SessionContext, sql::TableReference};
-use datafusion_table_providers::{
+use hydrangea_table_providers::{
     duckdb::DuckDBTableFactory, sql::db_connection_pool::duckdbpool::DuckDbConnectionPool,
 };
 

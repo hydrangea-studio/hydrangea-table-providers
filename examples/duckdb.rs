@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
 use datafusion::{prelude::SessionContext, sql::TableReference};
-use datafusion_table_providers::{
+use duckdb::AccessMode;
+use hydrangea_table_providers::{
     duckdb::DuckDBTableFactory, sql::db_connection_pool::duckdbpool::DuckDbConnectionPool,
 };
-use duckdb::AccessMode;
 
 /// This example demonstrates how to create a DuckDBTableFactory and use it to create TableProviders
 /// that can be registered with DataFusion.

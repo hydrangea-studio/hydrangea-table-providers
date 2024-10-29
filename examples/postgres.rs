@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use datafusion::{prelude::SessionContext, sql::TableReference};
-use datafusion_table_providers::{
+use hydrangea_table_providers::{
     postgres::PostgresTableFactory, sql::db_connection_pool::postgrespool::PostgresConnectionPool,
     util::secrets::to_secret_map,
 };

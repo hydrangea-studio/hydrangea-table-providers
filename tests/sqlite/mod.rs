@@ -4,13 +4,11 @@ use arrow::datatypes::SchemaRef;
 use datafusion::execution::context::SessionContext;
 #[cfg(feature = "sqlite-federation")]
 use datafusion_federation::schema_cast::record_convert::try_cast_to;
-use datafusion_table_providers::sql::arrow_sql_gen::statement::{
-    CreateTableBuilder, InsertBuilder,
-};
-use datafusion_table_providers::sql::db_connection_pool::sqlitepool::SqliteConnectionPoolFactory;
-use datafusion_table_providers::sql::db_connection_pool::{DbConnectionPool, Mode};
-use datafusion_table_providers::sql::sql_provider_datafusion::SqlTable;
-use datafusion_table_providers::sqlite::DynSqliteConnectionPool;
+use hydrangea_table_providers::sql::arrow_sql_gen::statement::{CreateTableBuilder, InsertBuilder};
+use hydrangea_table_providers::sql::db_connection_pool::sqlitepool::SqliteConnectionPoolFactory;
+use hydrangea_table_providers::sql::db_connection_pool::{DbConnectionPool, Mode};
+use hydrangea_table_providers::sql::sql_provider_datafusion::SqlTable;
+use hydrangea_table_providers::sqlite::DynSqliteConnectionPool;
 use rstest::rstest;
 use std::sync::Arc;
 

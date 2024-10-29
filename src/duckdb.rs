@@ -504,7 +504,7 @@ impl DuckDBTableFactory {
 /// ### Example
 ///
 /// ```rust,ignore
-/// use datafusion_table_providers::duckdb::create_table_function_view_name;
+/// use hydrangea_table_providers::duckdb::create_table_function_view_name;
 /// use datafusion::common::TableReference;
 ///
 /// let table_reference = TableReference::from("catalog.schema.read_parquet('cleaned_sales_data.parquet')");

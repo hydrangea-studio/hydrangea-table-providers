@@ -88,6 +88,7 @@ tokio-stream = { version = "0.1.15", features = ["net"] }
 arrow-schema = "53.1.0"
 prost = { version = "0.13" }
 insta = { version = "1.40.0", features = ["filters"] }
+datafusion-federation = "0.3.0"
 
 [features]
 mysql = ["dep:mysql_async", "dep:async-stream"]
@@ -111,5 +112,3 @@ duckdb-federation = ["duckdb", "federation"]
 sqlite-federation = ["sqlite", "federation"]
 postgres-federation = ["postgres", "federation"]
 mysql-federation = ["mysql", "federation"]
-
-

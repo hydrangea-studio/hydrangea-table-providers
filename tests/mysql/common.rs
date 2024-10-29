@@ -1,5 +1,5 @@
 use bollard::secret::HealthConfig;
-use datafusion_table_providers::sql::db_connection_pool::mysqlpool::MySQLConnectionPool;
+use hydrangea_table_providers::sql::db_connection_pool::mysqlpool::MySQLConnectionPool;
 use secrecy::SecretString;
 use std::collections::HashMap;
 use tracing::instrument;
@@ -78,7 +78,7 @@ pub async fn start_mysql_docker_container(port: usize) -> Result<RunningContaine
 pub(super) async fn get_mysql_connection_pool(
     port: usize,
 ) -> Result<MySQLConnectionPool, anyhow::Error> {
-    let mysql_pool = MySQLConnectionPool::new(get_mysql_params(port))
+    let mysql_pool = MySQLConnectionPool::new(get_mysql_params(port), true)
         .await
         .expect("Failed to create MySQL Connection Pool");
 

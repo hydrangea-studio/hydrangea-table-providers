@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use datafusion::{prelude::SessionContext, sql::TableReference};
-use datafusion_table_providers::{
+use hydrangea_table_providers::{
     mysql::MySQLTableFactory, sql::db_connection_pool::mysqlpool::MySQLConnectionPool,
     util::secrets::to_secret_map,
 };
@@ -37,7 +37,7 @@ async fn main() {
     ]));
 
     let mysql_pool = Arc::new(
-        MySQLConnectionPool::new(mysql_params)
+        MySQLConnectionPool::new(mysql_params, true)
             .await
             .expect("unable to create MySQL connection pool"),
     );

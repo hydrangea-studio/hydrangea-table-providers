@@ -12,7 +12,7 @@ use datafusion::physical_plan::memory::MemoryExec;
 #[cfg(feature = "postgres-federation")]
 use datafusion_federation::schema_cast::record_convert::try_cast_to;
 
-use datafusion_table_providers::{
+use hydrangea_table_providers::{
     postgres::{DynPostgresConnectionPool, PostgresTableProviderFactory},
     sql::sql_provider_datafusion::SqlTable,
 };

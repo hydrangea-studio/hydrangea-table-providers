@@ -503,7 +503,7 @@ pub(crate) mod tests {
     pub(crate) fn init_tracing(default_level: Option<&str>) -> DefaultGuard {
         let filter = match default_level {
             Some(level) => EnvFilter::new(level),
-            _ => EnvFilter::new("INFO,datafusion_table_providers=TRACE"),
+            _ => EnvFilter::new("INFO,hydrangea_table_providers=TRACE"),
         };
 
         let subscriber = tracing_subscriber::FmtSubscriber::builder()
