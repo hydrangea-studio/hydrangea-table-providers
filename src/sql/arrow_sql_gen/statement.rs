@@ -187,6 +187,7 @@ pub struct InsertBuilder {
     record_batches: Vec<RecordBatch>,
 }
 
+#[cfg(any(feature = "sqlite", feature = "mysql"))]
 pub fn use_json_insert_for_type<T: QueryBuilder + 'static>(
     data_type: &DataType,
     query_builder: &T,
@@ -610,15 +611,25 @@ impl InsertBuilder {
                             }
                             let list_array = valid_array.value(row);
 
-                            if use_json_insert_for_type(column_data_type, query_builder) {
-                                insert_list_into_row_values_json(
-                                    list_array,
-                                    list_type,
-                                    &mut row_values,
-                                )?;
-                            } else {
-                                insert_list_into_row_values(list_array, list_type, &mut row_values);
+                            #[cfg(any(feature = "sqlite", feature = "mysql"))]
+                            {
+                                if use_json_insert_for_type(column_data_type, query_builder) {
+                                    insert_list_into_row_values_json(
+                                        list_array,
+                                        list_type,
+                                        &mut row_values,
+                                    )?;
+                                } else {
+                                    insert_list_into_row_values(
+                                        list_array,
+                                        list_type,
+                                        &mut row_values,
+                                    );
+                                }
                             }
+
+                            #[cfg(not(any(feature = "sqlite", feature = "mysql")))]
+                            insert_list_into_row_values(list_array, list_type, &mut row_values);
                         }
                     }
                     DataType::LargeList(list_type) => {
@@ -630,15 +641,25 @@ impl InsertBuilder {
                             }
                             let list_array = valid_array.value(row);
 
-                            if use_json_insert_for_type(column_data_type, query_builder) {
-                                insert_list_into_row_values_json(
-                                    list_array,
-                                    list_type,
-                                    &mut row_values,
-                                )?;
-                            } else {
-                                insert_list_into_row_values(list_array, list_type, &mut row_values);
+                            #[cfg(any(feature = "sqlite", feature = "mysql"))]
+                            {
+                                if use_json_insert_for_type(column_data_type, query_builder) {
+                                    insert_list_into_row_values_json(
+                                        list_array,
+                                        list_type,
+                                        &mut row_values,
+                                    )?;
+                                } else {
+                                    insert_list_into_row_values(
+                                        list_array,
+                                        list_type,
+                                        &mut row_values,
+                                    );
+                                }
                             }
+
+                            #[cfg(not(any(feature = "sqlite", feature = "mysql")))]
+                            insert_list_into_row_values(list_array, list_type, &mut row_values);
                         }
                     }
                     DataType::FixedSizeList(list_type, _) => {
@@ -650,13 +671,25 @@ impl InsertBuilder {
                             }
                             let list_array = valid_array.value(row);
 
-                            if use_json_insert_for_type(column_data_type, query_builder) {
-                                insert_list_into_row_values_json(
-                                    list_array,
-                                    list_type,
-                                    &mut row_values,
-                                )?;
-                            } else {
+                            #[cfg(any(feature = "sqlite", feature = "mysql"))]
+                            {
+                                if use_json_insert_for_type(column_data_type, query_builder) {
+                                    insert_list_into_row_values_json(
+                                        list_array,
+                                        list_type,
+                                        &mut row_values,
+                                    )?;
+                                } else {
+                                    insert_list_into_row_values(
+                                        list_array,
+                                        list_type,
+                                        &mut row_values,
+                                    );
+                                }
+                            }
+
+                            #[cfg(not(any(feature = "sqlite", feature = "mysql")))]
+                            {
                                 insert_list_into_row_values(list_array, list_type, &mut row_values);
                             }
                         }
@@ -782,14 +815,21 @@ impl InsertBuilder {
                                 continue;
                             }
 
-                            if use_json_insert_for_type(column_data_type, query_builder) {
-                                insert_struct_into_row_values_json(
-                                    fields,
-                                    valid_array,
-                                    row,
-                                    &mut row_values,
-                                )?;
-                                continue;
+                            #[cfg(any(feature = "sqlite", feature = "mysql"))]
+                            {
+                                if use_json_insert_for_type(column_data_type, query_builder) {
+                                    insert_struct_into_row_values_json(
+                                        fields,
+                                        valid_array,
+                                        row,
+                                        &mut row_values,
+                                    )?;
+                                    continue;
+                                }
+                            }
+                            #[cfg(not(any(feature = "sqlite", feature = "mysql")))]
+                            {
+                                let _ = fields.len();
                             }
 
                             let mut param_values: Vec<SimpleExpr> = vec![];
@@ -1311,6 +1351,7 @@ macro_rules! serialize_list_values {
     }};
 }
 
+#[allow(dead_code)]
 fn insert_list_into_row_values_json(
     list_array: Arc<dyn Array>,
     list_type: &Arc<Field>,
@@ -1346,6 +1387,7 @@ fn insert_list_into_row_values_json(
     Ok(())
 }
 
+#[allow(dead_code)]
 fn insert_struct_into_row_values_json(
     fields: &Fields,
     array: &StructArray,
