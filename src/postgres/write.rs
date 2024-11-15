@@ -1,5 +1,3 @@
-use std::{any::Any, fmt, sync::Arc};
-
 use arrow::datatypes::SchemaRef;
 use async_trait::async_trait;
 use datafusion::{
@@ -14,8 +12,11 @@ use datafusion::{
         DisplayAs, DisplayFormatType, ExecutionPlan,
     },
 };
+use datafusion_expr::dml::InsertOp;
 use futures::StreamExt;
 use snafu::prelude::*;
+use std::fmt::{Debug, Formatter};
+use std::{any::Any, fmt, sync::Arc};
 
 use crate::util::{
     constraints, on_conflict::OnConflict, retriable_error::check_and_mark_retriable_error,
@@ -45,6 +46,14 @@ impl PostgresTableWriter {
 
     pub fn postgres(&self) -> Arc<Postgres> {
         Arc::clone(&self.postgres)
+    }
+}
+
+impl Debug for PostgresTableWriter {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PostgresTableWriter")
+            .field("table", &self.postgres.table)
+            .finish()
     }
 }
 
@@ -82,7 +91,7 @@ impl TableProvider for PostgresTableWriter {
         &self,
         _state: &dyn Session,
         input: Arc<dyn ExecutionPlan>,
-        overwrite: bool,
+        overwrite: InsertOp,
     ) -> datafusion::error::Result<Arc<dyn ExecutionPlan>> {
         Ok(Arc::new(DataSinkExec::new(
             input,
@@ -100,7 +109,7 @@ impl TableProvider for PostgresTableWriter {
 #[derive(Clone)]
 struct PostgresDataSink {
     postgres: Arc<Postgres>,
-    overwrite: bool,
+    overwrite: InsertOp,
     on_conflict: Option<OnConflict>,
 }
 
@@ -131,7 +140,7 @@ impl DataSink for PostgresDataSink {
             .context(super::UnableToBeginTransactionSnafu)
             .map_err(to_datafusion_error)?;
 
-        if self.overwrite {
+        if self.overwrite == InsertOp::Overwrite {
             self.postgres
                 .delete_all_table_data(&tx)
                 .await
@@ -172,7 +181,7 @@ impl DataSink for PostgresDataSink {
 }
 
 impl PostgresDataSink {
-    fn new(postgres: Arc<Postgres>, overwrite: bool, on_conflict: Option<OnConflict>) -> Self {
+    fn new(postgres: Arc<Postgres>, overwrite: InsertOp, on_conflict: Option<OnConflict>) -> Self {
         Self {
             postgres,
             overwrite,

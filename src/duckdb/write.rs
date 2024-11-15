@@ -1,5 +1,3 @@
-use std::{any::Any, fmt, sync::Arc};
-
 use crate::duckdb::DuckDB;
 use crate::util::{
     constraints,
@@ -21,9 +19,12 @@ use datafusion::{
         DisplayAs, DisplayFormatType, ExecutionPlan,
     },
 };
+use datafusion_expr::dml::InsertOp;
 use duckdb::Transaction;
 use futures::StreamExt;
 use snafu::prelude::*;
+use std::fmt::{Debug, Formatter};
+use std::{any::Any, fmt, sync::Arc};
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::task::JoinHandle;
 
@@ -51,6 +52,14 @@ impl DuckDBTableWriter {
 
     pub fn duckdb(&self) -> Arc<DuckDB> {
         Arc::clone(&self.duckdb)
+    }
+}
+
+impl Debug for DuckDBTableWriter {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("DuckDBTableWriter")
+            .field("table_name", &self.duckdb.table_name)
+            .finish()
     }
 }
 
@@ -88,7 +97,7 @@ impl TableProvider for DuckDBTableWriter {
         &self,
         _state: &dyn Session,
         input: Arc<dyn ExecutionPlan>,
-        overwrite: bool,
+        overwrite: InsertOp,
     ) -> datafusion::error::Result<Arc<dyn ExecutionPlan>> {
         Ok(Arc::new(DataSinkExec::new(
             input,
@@ -106,7 +115,7 @@ impl TableProvider for DuckDBTableWriter {
 #[derive(Clone)]
 pub(crate) struct DuckDBDataSink {
     duckdb: Arc<DuckDB>,
-    overwrite: bool,
+    overwrite: InsertOp,
     on_conflict: Option<OnConflict>,
 }
 
@@ -126,7 +135,7 @@ impl DataSink for DuckDBDataSink {
         _context: &Arc<TaskContext>,
     ) -> datafusion::common::Result<u64> {
         let duckdb = Arc::clone(&self.duckdb);
-        let overwrite = self.overwrite;
+        let overwrite = self.overwrite == InsertOp::Overwrite;
         let on_conflict = self.on_conflict.clone();
 
         // Limit channel size to a maximum of 100 RecordBatches queued for cases when DuckDB is slower than the writer stream,
@@ -226,7 +235,7 @@ impl DataSink for DuckDBDataSink {
 impl DuckDBDataSink {
     pub(crate) fn new(
         duckdb: Arc<DuckDB>,
-        overwrite: bool,
+        overwrite: InsertOp,
         on_conflict: Option<OnConflict>,
     ) -> Self {
         Self {
