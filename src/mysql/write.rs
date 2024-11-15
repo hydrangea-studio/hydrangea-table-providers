@@ -8,7 +8,9 @@ use datafusion::{
     catalog::Session,
     datasource::{TableProvider, TableType},
     execution::{SendableRecordBatchStream, TaskContext},
-    logical_expr::Expr,
+    logical_expr::{
+        dml::InsertOp, Expr,
+    },
     physical_plan::{
         insert::{DataSink, DataSinkExec},
         metrics::MetricsSet,
@@ -20,6 +22,7 @@ use mysql_async::TxOpts;
 use snafu::ResultExt;
 use std::any::Any;
 use std::fmt;
+use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -44,6 +47,14 @@ impl MySQLTableWriter {
 
     pub fn mysql(&self) -> Arc<MySQL> {
         Arc::clone(&self.mysql)
+    }
+}
+
+impl Debug for MySQLTableWriter {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MySQLTableWriter")
+            .field("table", &self.mysql.table)
+            .finish()
     }
 }
 
@@ -77,7 +88,7 @@ impl TableProvider for MySQLTableWriter {
         &self,
         _state: &dyn Session,
         input: Arc<dyn ExecutionPlan>,
-        overwrite: bool,
+        overwrite: InsertOp,
     ) -> datafusion::common::Result<Arc<dyn ExecutionPlan>> {
         Ok(Arc::new(DataSinkExec::new(
             input,
@@ -94,7 +105,7 @@ impl TableProvider for MySQLTableWriter {
 
 pub struct MySQLDataSink {
     pub mysql: Arc<MySQL>,
-    pub overwrite: bool,
+    pub overwrite: InsertOp,
     pub on_conflict: Option<OnConflict>,
 }
 
@@ -125,7 +136,7 @@ impl DataSink for MySQLDataSink {
             .context(super::UnableToBeginTransactionSnafu)
             .map_err(to_datafusion_error)?;
 
-        if self.overwrite {
+        if self.overwrite == InsertOp::Overwrite {
             self.mysql
                 .delete_all_table_data(&mut tx)
                 .await
@@ -168,7 +179,7 @@ impl DataSink for MySQLDataSink {
 }
 
 impl MySQLDataSink {
-    pub fn new(mysql: Arc<MySQL>, overwrite: bool, on_conflict: Option<OnConflict>) -> Self {
+    pub fn new(mysql: Arc<MySQL>, overwrite: InsertOp, on_conflict: Option<OnConflict>) -> Self {
         Self {
             mysql,
             overwrite,

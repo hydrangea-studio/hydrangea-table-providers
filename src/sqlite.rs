@@ -27,6 +27,7 @@ use sea_query::{DeleteStatement, SqliteQueryBuilder};
 use snafu::prelude::*;
 use sql_table::SQLiteTable;
 use std::collections::HashSet;
+use std::fmt::{Debug, Formatter};
 use std::time::Duration;
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
@@ -199,6 +200,12 @@ impl Default for SqliteTableProviderFactory {
 
 pub type DynSqliteConnectionPool =
     dyn DbConnectionPool<Connection, &'static (dyn ToSql + Sync)> + Send + Sync;
+
+impl Debug for SqliteTableProviderFactory {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SqliteTableProviderFactory").finish()
+    }
+}
 
 #[async_trait]
 impl TableProviderFactory for SqliteTableProviderFactory {

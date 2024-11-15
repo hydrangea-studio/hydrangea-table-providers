@@ -10,6 +10,7 @@ use crate::sql::db_connection_pool::{
 
 use crate::sql::sql_provider_datafusion::{Engine, SqlTable};
 
+use self::write::PostgresTableWriter;
 use crate::util::{
     self,
     column_reference::{self, ColumnReference},
@@ -40,9 +41,8 @@ use datafusion::{
 use postgres_native_tls::MakeTlsConnector;
 use sea_query::{DeleteStatement, PostgresQueryBuilder};
 use snafu::prelude::*;
+use std::fmt::{Debug, Formatter};
 use std::{collections::HashMap, sync::Arc};
-
-use self::write::PostgresTableWriter;
 
 pub mod write;
 
@@ -194,6 +194,12 @@ impl PostgresTableProviderFactory {
 impl Default for PostgresTableProviderFactory {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl Debug for PostgresTableProviderFactory {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "PostgresTableProviderFactory")
     }
 }
 

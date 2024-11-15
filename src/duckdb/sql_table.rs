@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use datafusion::catalog::Session;
 use futures::TryStreamExt;
 use std::collections::HashMap;
-use std::fmt::Display;
+use std::fmt::{Debug, Display, Formatter};
 use std::{any::Any, fmt, sync::Arc};
 
 use crate::sql::sql_provider_datafusion::{
@@ -64,6 +64,12 @@ impl<T, P> DuckDBTable<T, P> {
             sql,
             self.table_functions.clone(),
         )?))
+    }
+}
+
+impl<T, P> Debug for DuckDBTable<T, P> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "DuckDBTable {}", self.base_table.name())
     }
 }
 

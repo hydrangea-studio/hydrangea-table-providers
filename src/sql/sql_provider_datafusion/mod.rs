@@ -200,6 +200,11 @@ impl<T, P> SqlTable<T, P> {
     }
 
     #[must_use]
+    pub fn engine(&self) -> Engine {
+        self.engine
+    }
+
+    #[must_use]
     pub fn clone_pool(&self) -> Arc<dyn DbConnectionPool<T, P> + Send + Sync> {
         Arc::clone(&self.pool)
     }

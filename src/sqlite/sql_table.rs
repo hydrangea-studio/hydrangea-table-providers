@@ -3,7 +3,7 @@ use crate::sql::sql_provider_datafusion::Engine;
 use async_trait::async_trait;
 use datafusion::catalog::Session;
 use futures::TryStreamExt;
-use std::fmt::Display;
+use std::fmt::{Debug, Display, Formatter};
 use std::{any::Any, fmt, sync::Arc};
 
 use crate::sql::sql_provider_datafusion::{
@@ -55,6 +55,16 @@ impl<T, P> SQLiteTable<T, P> {
             self.base_table.clone_pool(),
             sql,
         )?))
+    }
+}
+
+impl<T, P> Debug for SQLiteTable<T, P> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SQLiteTable")
+            .field("name", &self.base_table.name())
+            .field("table", &self.base_table.table_reference)
+            .field("engine", &self.base_table.engine())
+            .finish()
     }
 }
 

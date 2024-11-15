@@ -30,6 +30,7 @@ use datafusion::{
 use duckdb::{AccessMode, DuckdbConnectionManager, Transaction};
 use itertools::Itertools;
 use snafu::prelude::*;
+use std::fmt::{Debug, Formatter};
 use std::{cmp, collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 
@@ -203,6 +204,14 @@ impl DuckDBTableProviderFactory {
 type DynDuckDbConnectionPool = dyn DbConnectionPool<r2d2::PooledConnection<DuckdbConnectionManager>, DuckDBParameter>
     + Send
     + Sync;
+
+impl Debug for DuckDBTableProviderFactory {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DuckDBTableProviderFactory")
+            .field("access_mode", &self.access_mode)
+            .finish()
+    }
+}
 
 #[async_trait]
 impl TableProviderFactory for DuckDBTableProviderFactory {

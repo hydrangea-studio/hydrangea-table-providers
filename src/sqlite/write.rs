@@ -1,5 +1,3 @@
-use std::{any::Any, fmt, sync::Arc};
-
 use arrow::{array::RecordBatch, datatypes::SchemaRef};
 use async_trait::async_trait;
 use datafusion::{
@@ -8,7 +6,9 @@ use datafusion::{
     datasource::{TableProvider, TableType},
     error::DataFusionError,
     execution::{SendableRecordBatchStream, TaskContext},
-    logical_expr::Expr,
+    logical_expr::{
+        dml::InsertOp, Expr,
+    },
     physical_plan::{
         insert::{DataSink, DataSinkExec},
         metrics::MetricsSet,
@@ -17,6 +17,8 @@ use datafusion::{
 };
 use futures::StreamExt;
 use snafu::prelude::*;
+use std::fmt::{Debug, Formatter};
+use std::{any::Any, fmt, sync::Arc};
 
 use crate::util::{
     constraints,
@@ -48,6 +50,14 @@ impl SqliteTableWriter {
 
     pub fn sqlite(&self) -> Arc<Sqlite> {
         Arc::clone(&self.sqlite)
+    }
+}
+
+impl Debug for SqliteTableWriter {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SqliteTableWriter")
+            .field("table", &self.sqlite.table)
+            .finish()
     }
 }
 
@@ -85,7 +95,7 @@ impl TableProvider for SqliteTableWriter {
         &self,
         _state: &dyn Session,
         input: Arc<dyn ExecutionPlan>,
-        overwrite: bool,
+        overwrite: InsertOp,
     ) -> datafusion::error::Result<Arc<dyn ExecutionPlan>> {
         Ok(Arc::new(DataSinkExec::new(
             input,
@@ -103,7 +113,7 @@ impl TableProvider for SqliteTableWriter {
 #[derive(Clone)]
 struct SqliteDataSink {
     sqlite: Arc<Sqlite>,
-    overwrite: bool,
+    overwrite: InsertOp,
     on_conflict: Option<OnConflict>,
 }
 
@@ -168,7 +178,7 @@ impl DataSink for SqliteDataSink {
             Ok::<_, DataFusionError>(num_rows)
         });
 
-        let overwrite = self.overwrite;
+        let overwrite = self.overwrite == InsertOp::Overwrite;
         let sqlite = Arc::clone(&self.sqlite);
         let on_conflict = self.on_conflict.clone();
         sqlite_conn
@@ -207,7 +217,7 @@ impl DataSink for SqliteDataSink {
 }
 
 impl SqliteDataSink {
-    fn new(sqlite: Arc<Sqlite>, overwrite: bool, on_conflict: Option<OnConflict>) -> Self {
+    fn new(sqlite: Arc<Sqlite>, overwrite: InsertOp, on_conflict: Option<OnConflict>) -> Self {
         Self {
             sqlite,
             overwrite,

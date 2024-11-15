@@ -46,6 +46,7 @@ use mysql_async::TxOpts;
 use sea_query::{DeleteStatement, MysqlQueryBuilder};
 use snafu::prelude::*;
 use std::collections::HashMap;
+use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 
 pub type DynMySQLConnectionPool =
@@ -171,6 +172,12 @@ impl MySQLTableProviderFactory {
 impl Default for MySQLTableProviderFactory {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl Debug for MySQLTableProviderFactory {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "MySQLTableProviderFactory")
     }
 }
 
